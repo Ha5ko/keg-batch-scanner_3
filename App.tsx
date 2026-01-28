@@ -113,7 +113,7 @@ function MainApp() {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 1.0,
       allowsEditing: true,
-      aspect: [4, 1], // Wide aspect ratio to focus on batch code line
+      aspect: [3, 1], // 3:1 wide aspect ratio for batch code
     });
 
     if (!result.canceled && result.assets[0]) {
@@ -151,11 +151,6 @@ function MainApp() {
     const code = inputCode.trim().toUpperCase();
     if (!code) {
       Alert.alert('Error', 'Enter a batch code');
-      return;
-    }
-
-    if (scannedCodes.includes(code)) {
-      Alert.alert('Duplicate', `${code} already scanned`);
       return;
     }
 
