@@ -40,28 +40,28 @@ function MainApp() {
   }, []);
 
   const findBatchCode = (text: string): string | null => {
-    // Look for patterns starting with L followed by 4 digits and 2 letters
-    // Examples: L5078MA 10:52, L5074BB, L5082RA 09:15
+    // Look for patterns starting with L followed by alphanumeric characters
+    // Examples: L5078MA 10:52, L5074BB, LS28401809:30, L5284018 09:30
     // Only extract from "L" onwards, ignoring any text before it
 
     const allText = text.toUpperCase();
 
-    // Primary pattern: L + 4 digits + 2 letters + optional time
-    // This will match: L5078MA, L5078MA 10:52, L5078MA10:52
-    const fullPattern = /L\d{4}[A-Z]{2}(\s*\d{1,2}:\d{2})?/g;
-    const matches = allText.match(fullPattern);
+    // Pattern 1: L + alphanumeric (5+ chars) + optional space + time
+    // Matches: L5078MA 10:52, LS28401809:30, L528401809:30
+    const withTimePattern = /L[A-Z0-9]{5,}[\s]*\d{1,2}:\d{2}/g;
+    const timeMatches = allText.match(withTimePattern);
 
-    if (matches && matches.length > 0) {
-      // Return the first valid match, cleaned up
-      return matches[0].trim();
+    if (timeMatches && timeMatches.length > 0) {
+      return timeMatches[0].trim();
     }
 
-    // Fallback: Look for any L followed by at least 4 digits and 2 letters
-    const fallbackPattern = /L\d{4}[A-Z]{2}/g;
-    const fallbackMatches = allText.match(fallbackPattern);
+    // Pattern 2: L + alphanumeric (5+ chars) without time
+    // Matches: L5078MA, LS284018, L5074BB
+    const noTimePattern = /L[A-Z0-9]{5,}/g;
+    const noTimeMatches = allText.match(noTimePattern);
 
-    if (fallbackMatches && fallbackMatches.length > 0) {
-      return fallbackMatches[0];
+    if (noTimeMatches && noTimeMatches.length > 0) {
+      return noTimeMatches[0];
     }
 
     return null;
