@@ -1,4 +1,4 @@
-// Simplified App entry point for debugging
+// Keg Batch Scanner App using expo-barcode-scanner
 
 import React, { useState, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
@@ -10,7 +10,7 @@ import {
   Alert,
   SafeAreaView,
 } from 'react-native';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { BarCodeScanner } from 'expo-barcode-scanner';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -24,13 +24,18 @@ const COLORS = {
 };
 
 export default function App() {
-  const [permission, requestPermission] = useCameraPermissions();
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [scannedCodes, setScannedCodes] = useState<string[]>([]);
   const [lastScanned, setLastScanned] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Load saved scans on mount
+  // Request camera permission on mount
   useEffect(() => {
+    const getPermission = async () => {
+      const { status } = await BarCodeScanner.requestPermissionsAsync();
+      setHasPermission(status === 'granted');
+    };
+    getPermission();
     loadScans();
   }, []);
 
@@ -53,7 +58,7 @@ export default function App() {
     }
   };
 
-  const handleBarcodeScan = async (data: string) => {
+  const handleBarCodeScanned = async ({ data }: { type: string; data: string }) => {
     if (isProcessing) return;
     if (data === lastScanned) return;
 
@@ -78,7 +83,7 @@ export default function App() {
   };
 
   // Loading state
-  if (!permission) {
+  if (hasPermission === null) {
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar style="light" />
@@ -86,14 +91,14 @@ export default function App() {
           <Text style={styles.headerText}>Keg Scanner</Text>
         </View>
         <View style={styles.center}>
-          <Text style={styles.messageText}>Loading...</Text>
+          <Text style={styles.messageText}>Requesting camera permission...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
-  // Permission not granted
-  if (!permission.granted) {
+  // Permission denied
+  if (hasPermission === false) {
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar style="light" />
@@ -101,13 +106,10 @@ export default function App() {
           <Text style={styles.headerText}>Keg Scanner</Text>
         </View>
         <View style={styles.center}>
-          <Text style={styles.messageText}>Camera access needed</Text>
+          <Text style={styles.messageText}>Camera access denied</Text>
           <Text style={styles.subText}>
-            This app needs camera permission to scan barcodes
+            Please enable camera permission in your device settings to use this app.
           </Text>
-          <TouchableOpacity style={styles.button} onPress={requestPermission}>
-            <Text style={styles.buttonText}>Allow Camera</Text>
-          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
@@ -123,17 +125,23 @@ export default function App() {
       </View>
 
       <View style={styles.cameraBox}>
-        <CameraView
-          style={styles.camera}
-          facing="back"
-          barcodeScannerSettings={{
-            barcodeTypes: ['qr', 'ean13', 'ean8', 'code128', 'code39'],
-          }}
-          onBarcodeScanned={isProcessing ? undefined : (result) => {
-            if (result.data) {
-              handleBarcodeScan(result.data);
-            }
-          }}
+        <BarCodeScanner
+          onBarCodeScanned={isProcessing ? undefined : handleBarCodeScanned}
+          style={StyleSheet.absoluteFillObject}
+          barCodeTypes={[
+            BarCodeScanner.Constants.BarCodeType.qr,
+            BarCodeScanner.Constants.BarCodeType.ean13,
+            BarCodeScanner.Constants.BarCodeType.ean8,
+            BarCodeScanner.Constants.BarCodeType.code128,
+            BarCodeScanner.Constants.BarCodeType.code39,
+            BarCodeScanner.Constants.BarCodeType.code93,
+            BarCodeScanner.Constants.BarCodeType.codabar,
+            BarCodeScanner.Constants.BarCodeType.itf14,
+            BarCodeScanner.Constants.BarCodeType.upc_a,
+            BarCodeScanner.Constants.BarCodeType.upc_e,
+            BarCodeScanner.Constants.BarCodeType.pdf417,
+            BarCodeScanner.Constants.BarCodeType.datamatrix,
+          ]}
         />
         <View style={styles.overlay}>
           <View style={styles.scanBox} />
@@ -190,25 +198,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 20,
   },
-  button: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 30,
-    paddingVertical: 15,
-    borderRadius: 8,
-  },
-  buttonText: {
-    color: COLORS.white,
-    fontSize: 16,
-    fontWeight: '600',
-  },
   cameraBox: {
     flex: 1,
     margin: 16,
     borderRadius: 12,
     overflow: 'hidden',
-  },
-  camera: {
-    flex: 1,
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,

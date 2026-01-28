@@ -26,7 +26,7 @@
     },
     "plugins": [
       [
-        "expo-camera",
+        "expo-barcode-scanner",
         {
           "cameraPermission": "Allow Keg Batch Scanner to access your camera for barcode scanning."
         }
