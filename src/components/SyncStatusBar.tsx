@@ -1,22 +1,19 @@
-// Status bar component showing connection and sync status
+// Sync status bar component showing connection and sync status
 
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { COLORS } from '../utils/config';
-import { getTimeAgo } from '../utils/helpers';
 
-interface StatusBarProps {
+interface SyncStatusBarProps {
   isOnline: boolean;
   pendingCount: number;
-  lastSyncTime: string | null;
   isSyncing: boolean;
   onSyncPress: () => void;
 }
 
-export const StatusBar: React.FC<StatusBarProps> = ({
+export const SyncStatusBar: React.FC<SyncStatusBarProps> = ({
   isOnline,
   pendingCount,
-  lastSyncTime,
   isSyncing,
   onSyncPress,
 }) => {
@@ -45,7 +42,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
       <TouchableOpacity
         style={[
           styles.syncButton,
-          isSyncing && styles.syncButtonDisabled,
+          (isSyncing || pendingCount === 0) && styles.syncButtonDisabled,
         ]}
         onPress={onSyncPress}
         disabled={isSyncing || pendingCount === 0}
