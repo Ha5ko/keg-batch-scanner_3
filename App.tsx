@@ -1,4 +1,4 @@
-// Keg Batch Scanner - With Camera and OCR
+// Keg Batch Scanner - With Camera, OCR, and Google Sheets Sync
 import React, { useState, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import {
@@ -17,11 +17,19 @@ import * as ImagePicker from 'expo-image-picker';
 import TextRecognition from '@react-native-ml-kit/text-recognition';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+// ========== CONFIGURATION ==========
+// Replace this URL with your Google Apps Script Web App URL
+// See google-apps-script/Code.gs for setup instructions
+const GOOGLE_SCRIPT_URL = 'YOUR_GOOGLE_SCRIPT_URL_HERE';
+const USER_EMAIL = 'shantu.hasko@ab-inbev.com';
+// ===================================
+
 function MainApp() {
   const [scannedCodes, setScannedCodes] = useState<string[]>([]);
   const [inputCode, setInputCode] = useState('');
   const [lastPhoto, setLastPhoto] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem('keg_codes')
@@ -53,6 +61,39 @@ function MainApp() {
     }
 
     return null;
+  };
+
+  const syncToGoogleSheets = async (batchCode: string): Promise<boolean> => {
+    // Skip if URL not configured
+    if (GOOGLE_SCRIPT_URL === 'YOUR_GOOGLE_SCRIPT_URL_HERE') {
+      return false;
+    }
+
+    try {
+      const scanData = {
+        action: 'addScans',
+        email: USER_EMAIL,
+        scans: [{
+          id: `scan-${Date.now()}`,
+          batchCode: batchCode,
+          timestamp: new Date().toISOString(),
+        }],
+      };
+
+      const response = await fetch(GOOGLE_SCRIPT_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(scanData),
+      });
+
+      const result = await response.json();
+      return result.success === true;
+    } catch (error) {
+      console.error('Sync error:', error);
+      return false;
+    }
   };
 
   const takePhoto = async () => {
@@ -113,6 +154,9 @@ function MainApp() {
       return;
     }
 
+    setIsSyncing(true);
+
+    // Save locally first
     const updated = [code, ...scannedCodes];
     setScannedCodes(updated);
     setInputCode('');
@@ -120,14 +164,25 @@ function MainApp() {
 
     try {
       await AsyncStorage.setItem('keg_codes', JSON.stringify(updated));
-      Alert.alert('Saved!', code);
     } catch {
-      Alert.alert('Error', 'Save failed');
+      // Local save failed, but continue
+    }
+
+    // Sync to Google Sheets
+    const synced = await syncToGoogleSheets(code);
+    setIsSyncing(false);
+
+    if (GOOGLE_SCRIPT_URL === 'YOUR_GOOGLE_SCRIPT_URL_HERE') {
+      Alert.alert('Saved Locally', `${code}\n\n(Google Sheets not configured)`);
+    } else if (synced) {
+      Alert.alert('Saved & Synced!', `${code}\n\nUploaded to Google Sheets`);
+    } else {
+      Alert.alert('Saved Locally', `${code}\n\nSync failed - check connection`);
     }
   };
 
   const clearAll = () => {
-    Alert.alert('Clear All', 'Delete all scanned codes?', [
+    Alert.alert('Clear All', 'Delete all scanned codes from this device?\n\n(Does not affect Google Sheets)', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Clear',
@@ -141,6 +196,8 @@ function MainApp() {
     ]);
   };
 
+  const isConfigured = GOOGLE_SCRIPT_URL !== 'YOUR_GOOGLE_SCRIPT_URL_HERE';
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar style="light" />
@@ -152,11 +209,18 @@ function MainApp() {
         </TouchableOpacity>
       </View>
 
+      {/* Sync Status Banner */}
+      {!isConfigured && (
+        <View style={styles.warningBanner}>
+          <Text style={styles.warningText}>Google Sheets not configured - saving locally only</Text>
+        </View>
+      )}
+
       {/* Camera Button */}
       <TouchableOpacity
         style={[styles.cameraBtn, isProcessing && styles.cameraBtnDisabled]}
         onPress={takePhoto}
-        disabled={isProcessing}
+        disabled={isProcessing || isSyncing}
       >
         {isProcessing ? (
           <View style={styles.processingRow}>
@@ -185,9 +249,21 @@ function MainApp() {
           placeholder="e.g. L5078MA 10:52"
           placeholderTextColor="#999"
           autoCapitalize="characters"
+          editable={!isSyncing}
         />
-        <TouchableOpacity style={styles.saveBtn} onPress={saveCode}>
-          <Text style={styles.saveBtnText}>SAVE CODE</Text>
+        <TouchableOpacity
+          style={[styles.saveBtn, isSyncing && styles.saveBtnDisabled]}
+          onPress={saveCode}
+          disabled={isSyncing}
+        >
+          {isSyncing ? (
+            <View style={styles.processingRow}>
+              <ActivityIndicator color="#FFF" size="small" />
+              <Text style={styles.saveBtnText}>  SYNCING...</Text>
+            </View>
+          ) : (
+            <Text style={styles.saveBtnText}>SAVE CODE</Text>
+          )}
         </TouchableOpacity>
       </View>
 
@@ -227,6 +303,16 @@ const styles = StyleSheet.create({
   },
   title: { color: '#FFF', fontSize: 22, fontWeight: 'bold' },
   headerBtn: { color: '#FFF', fontSize: 16 },
+  warningBanner: {
+    backgroundColor: '#FFA500',
+    padding: 8,
+    alignItems: 'center',
+  },
+  warningText: {
+    color: '#000',
+    fontSize: 12,
+    fontWeight: '600',
+  },
   cameraBtn: {
     backgroundColor: '#D00000',
     margin: 12,
@@ -278,6 +364,9 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 8,
     alignItems: 'center',
+  },
+  saveBtnDisabled: {
+    backgroundColor: '#888',
   },
   saveBtnText: { color: '#FFF', fontSize: 18, fontWeight: 'bold' },
   historyTitle: {
