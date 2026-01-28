@@ -1,4 +1,4 @@
-// Keg Batch Scanner - Manual Entry Only (Working Version)
+// Keg Batch Scanner - With Camera via Image Picker
 import React, { useState, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import {
@@ -9,13 +9,16 @@ import {
   TextInput,
   Alert,
   FlatList,
+  Image,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 function MainApp() {
   const [scannedCodes, setScannedCodes] = useState<string[]>([]);
   const [inputCode, setInputCode] = useState('');
+  const [lastPhoto, setLastPhoto] = useState<string | null>(null);
 
   useEffect(() => {
     AsyncStorage.getItem('keg_codes')
@@ -24,6 +27,28 @@ function MainApp() {
       })
       .catch(() => {});
   }, []);
+
+  const takePhoto = async () => {
+    // Request camera permission
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Needed', 'Camera permission is required to take photos');
+      return;
+    }
+
+    // Launch camera
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.8,
+      allowsEditing: false,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      setLastPhoto(result.assets[0].uri);
+      // Photo captured - user can now type the code they see
+      Alert.alert('Photo Captured', 'Now type the batch code you see in the photo');
+    }
+  };
 
   const saveCode = async () => {
     const code = inputCode.trim().toUpperCase();
@@ -40,6 +65,7 @@ function MainApp() {
     const updated = [code, ...scannedCodes];
     setScannedCodes(updated);
     setInputCode('');
+    setLastPhoto(null);
 
     try {
       await AsyncStorage.setItem('keg_codes', JSON.stringify(updated));
@@ -57,6 +83,7 @@ function MainApp() {
         style: 'destructive',
         onPress: async () => {
           setScannedCodes([]);
+          setLastPhoto(null);
           await AsyncStorage.removeItem('keg_codes');
         },
       },
@@ -73,6 +100,19 @@ function MainApp() {
           <Text style={styles.headerBtn}>{scannedCodes.length} scans</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Camera Button */}
+      <TouchableOpacity style={styles.cameraBtn} onPress={takePhoto}>
+        <Text style={styles.cameraBtnText}>TAKE PHOTO OF BATCH CODE</Text>
+      </TouchableOpacity>
+
+      {/* Last Photo Preview */}
+      {lastPhoto && (
+        <View style={styles.photoContainer}>
+          <Image source={{ uri: lastPhoto }} style={styles.photoPreview} />
+          <Text style={styles.photoHint}>Type the code you see above</Text>
+        </View>
+      )}
 
       {/* Manual Entry */}
       <View style={styles.inputBox}>
@@ -126,9 +166,33 @@ const styles = StyleSheet.create({
   },
   title: { color: '#FFF', fontSize: 22, fontWeight: 'bold' },
   headerBtn: { color: '#FFF', fontSize: 16 },
+  cameraBtn: {
+    backgroundColor: '#D00000',
+    margin: 12,
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  cameraBtnText: { color: '#FFF', fontSize: 18, fontWeight: 'bold' },
+  photoContainer: {
+    marginHorizontal: 12,
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+  photoPreview: {
+    width: '100%',
+    height: 150,
+    borderRadius: 8,
+    backgroundColor: '#000',
+  },
+  photoHint: {
+    marginTop: 8,
+    color: '#666',
+    fontSize: 14,
+  },
   inputBox: {
     backgroundColor: '#FFF',
-    margin: 12,
+    marginHorizontal: 12,
     padding: 16,
     borderRadius: 12,
   },
