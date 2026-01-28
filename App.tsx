@@ -1,410 +1,164 @@
-// Keg Batch Scanner App with OCR for reading printed batch codes
-
-import React, { useState, useEffect, useRef } from 'react';
+// Minimal test app - absolute simplest version
+import React, { useState, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
+  TextInput,
   Alert,
-  SafeAreaView,
-  ActivityIndicator,
-  ScrollView,
+  FlatList,
 } from 'react-native';
-import { CameraView, useCameraPermissions } from 'expo-camera';
-import TextRecognition from '@react-native-ml-kit/text-recognition';
-import * as Haptics from 'expo-haptics';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Colors
-const COLORS = {
-  primary: '#D00000',
-  background: '#F5F5F5',
-  white: '#FFFFFF',
-  text: '#333333',
-  green: '#28A745',
-  gray: '#666666',
-};
-
-// Extract batch code starting with L from OCR text
-const extractBatchCode = (text: string): string | null => {
-  // Split into lines and find one starting with L
-  const lines = text.split('\n');
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    // Match lines starting with L followed by numbers/letters
-    // Pattern: L followed by alphanumeric, spaces, colons
-    if (/^L[0-9]/i.test(trimmed)) {
-      // Clean up the batch code - remove the date line if present
-      // Take only the first line that starts with L
-      const cleaned = trimmed.split('\n')[0].trim();
-      // Remove any trailing date patterns like "09/2025" etc
-      return cleaned;
-    }
-  }
-
-  // Also try to find L codes anywhere in text
-  const match = text.match(/L[0-9][A-Z0-9\s:]+/i);
-  if (match) {
-    // Clean: take until we hit a date pattern or newline
-    let code = match[0].trim();
-    // Stop at common date patterns
-    code = code.split(/\d{2}\/\d{4}/)[0].trim();
-    return code;
-  }
-
-  return null;
-};
-
-export default function App() {
-  const [permission, requestPermission] = useCameraPermissions();
+function MainApp() {
+  const [batchCode, setBatchCode] = useState('');
   const [scannedCodes, setScannedCodes] = useState<string[]>([]);
-  const [lastScanned, setLastScanned] = useState<string | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
-  const cameraRef = useRef<any>(null);
 
-  // Load saved scans on mount
   useEffect(() => {
-    loadScans();
+    // Load saved codes
+    AsyncStorage.getItem('keg_codes')
+      .then((data) => {
+        if (data) setScannedCodes(JSON.parse(data));
+      })
+      .catch(() => {});
   }, []);
 
-  const loadScans = async () => {
+  const saveCode = async () => {
+    const code = batchCode.trim().toUpperCase();
+    if (!code) {
+      Alert.alert('Error', 'Enter a batch code');
+      return;
+    }
+
+    if (scannedCodes.includes(code)) {
+      Alert.alert('Duplicate', 'Already scanned');
+      return;
+    }
+
+    const updated = [code, ...scannedCodes];
+    setScannedCodes(updated);
+    setBatchCode('');
+
     try {
-      const saved = await AsyncStorage.getItem('scanned_codes');
-      if (saved) {
-        setScannedCodes(JSON.parse(saved));
-      }
+      await AsyncStorage.setItem('keg_codes', JSON.stringify(updated));
+      Alert.alert('Saved', code);
     } catch (e) {
-      console.log('Error loading scans');
+      Alert.alert('Error', 'Save failed');
     }
   };
 
-  const saveScans = async (codes: string[]) => {
-    try {
-      await AsyncStorage.setItem('scanned_codes', JSON.stringify(codes));
-    } catch (e) {
-      console.log('Error saving scans');
-    }
-  };
-
-  const captureAndRecognize = async () => {
-    if (!cameraRef.current || isProcessing) return;
-
-    setIsProcessing(true);
-
-    try {
-      // Take photo
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.8,
-        base64: false,
-      });
-
-      // Run OCR
-      const result = await TextRecognition.recognize(photo.uri);
-
-      // Extract batch code
-      const batchCode = extractBatchCode(result.text);
-
-      if (batchCode) {
-        // Success - found a batch code
-        try {
-          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        } catch (e) {}
-
-        setLastScanned(batchCode);
-
-        // Check for duplicate
-        if (scannedCodes.includes(batchCode)) {
-          Alert.alert('Duplicate', `${batchCode} was already scanned`);
-        } else {
-          const newCodes = [batchCode, ...scannedCodes];
-          setScannedCodes(newCodes);
-          await saveScans(newCodes);
-          Alert.alert('Success!', `Scanned: ${batchCode}`);
-        }
-      } else {
-        // No batch code found
-        try {
-          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        } catch (e) {}
-
-        Alert.alert(
-          'No Batch Code Found',
-          'Could not find a code starting with "L". Please try again with better lighting or closer to the label.',
-          [{ text: 'OK' }]
-        );
-      }
-    } catch (error) {
-      console.log('OCR Error:', error);
-      Alert.alert('Error', 'Failed to process image. Please try again.');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  // Loading permission
-  if (!permission) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar style="light" />
-        <View style={styles.header}>
-          <Text style={styles.headerText}>Keg Scanner</Text>
-        </View>
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.messageText}>Loading...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  // Permission not granted
-  if (!permission.granted) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar style="light" />
-        <View style={styles.header}>
-          <Text style={styles.headerText}>Keg Scanner</Text>
-        </View>
-        <View style={styles.center}>
-          <Text style={styles.messageText}>Camera access needed</Text>
-          <Text style={styles.subText}>
-            This app needs camera permission to scan batch codes
-          </Text>
-          <TouchableOpacity style={styles.button} onPress={requestPermission}>
-            <Text style={styles.buttonText}>Allow Camera</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  // History view
-  if (showHistory) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar style="light" />
-        <View style={styles.header}>
-          <Text style={styles.headerText}>Scan History</Text>
-          <TouchableOpacity onPress={() => setShowHistory(false)}>
-            <Text style={styles.headerButton}>Close</Text>
-          </TouchableOpacity>
-        </View>
-        <ScrollView style={styles.historyList}>
-          {scannedCodes.length === 0 ? (
-            <Text style={styles.emptyText}>No scans yet</Text>
-          ) : (
-            scannedCodes.map((code, index) => (
-              <View key={index} style={styles.historyItem}>
-                <Text style={styles.historyCode}>{code}</Text>
-              </View>
-            ))
-          )}
-        </ScrollView>
-      </SafeAreaView>
-    );
-  }
-
-  // Main camera view
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar style="light" />
+
       <View style={styles.header}>
-        <Text style={styles.headerText}>Keg Scanner</Text>
-        <TouchableOpacity onPress={() => setShowHistory(true)}>
-          <Text style={styles.headerButton}>{scannedCodes.length} scans</Text>
+        <Text style={styles.title}>Keg Scanner</Text>
+        <Text style={styles.count}>{scannedCodes.length}</Text>
+      </View>
+
+      <View style={styles.inputBox}>
+        <TextInput
+          style={styles.input}
+          value={batchCode}
+          onChangeText={setBatchCode}
+          placeholder="Enter batch code (L...)"
+          placeholderTextColor="#999"
+          autoCapitalize="characters"
+        />
+        <TouchableOpacity style={styles.btn} onPress={saveCode}>
+          <Text style={styles.btnText}>SAVE</Text>
         </TouchableOpacity>
       </View>
 
-      <View style={styles.cameraBox}>
-        <CameraView
-          ref={cameraRef}
-          style={styles.camera}
-          facing="back"
-        >
-          <View style={styles.overlay}>
-            <View style={styles.scanBox}>
-              <Text style={styles.scanHint}>
-                Position the batch code (starting with L) in this area
-              </Text>
-            </View>
-          </View>
-        </CameraView>
-      </View>
-
-      {/* Capture Button */}
-      <View style={styles.bottomSection}>
-        {lastScanned && (
-          <View style={styles.lastScan}>
-            <Text style={styles.lastScanLabel}>Last scanned:</Text>
-            <Text style={styles.lastScanCode}>{lastScanned}</Text>
+      <FlatList
+        data={scannedCodes}
+        keyExtractor={(item, i) => `${item}-${i}`}
+        contentContainerStyle={styles.list}
+        ListEmptyComponent={<Text style={styles.empty}>No codes yet</Text>}
+        renderItem={({ item }) => (
+          <View style={styles.item}>
+            <Text style={styles.code}>{item}</Text>
           </View>
         )}
-
-        <TouchableOpacity
-          style={[styles.captureButton, isProcessing && styles.captureButtonDisabled]}
-          onPress={captureAndRecognize}
-          disabled={isProcessing}
-        >
-          {isProcessing ? (
-            <ActivityIndicator size="small" color={COLORS.white} />
-          ) : (
-            <Text style={styles.captureButtonText}>SCAN</Text>
-          )}
-        </TouchableOpacity>
-      </View>
+      />
     </SafeAreaView>
+  );
+}
+
+export default function App() {
+  return (
+    <SafeAreaProvider>
+      <MainApp />
+    </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: '#F5F5F5',
   },
   header: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: '#D00000',
     padding: 16,
-    paddingTop: 50,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  headerText: {
-    color: COLORS.white,
-    fontSize: 24,
+  title: {
+    color: '#FFF',
+    fontSize: 22,
     fontWeight: 'bold',
   },
-  headerButton: {
-    color: COLORS.white,
-    fontSize: 16,
+  count: {
+    color: '#FFF',
+    fontSize: 18,
     fontWeight: '600',
   },
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  messageText: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: COLORS.text,
-    marginTop: 16,
-    marginBottom: 10,
-  },
-  subText: {
-    fontSize: 14,
-    color: COLORS.gray,
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  button: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 30,
-    paddingVertical: 15,
-    borderRadius: 8,
-  },
-  buttonText: {
-    color: COLORS.white,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  cameraBox: {
-    flex: 1,
-    margin: 16,
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  camera: {
-    flex: 1,
-  },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.3)',
-  },
-  scanBox: {
-    width: 300,
-    height: 150,
-    borderWidth: 3,
-    borderColor: COLORS.primary,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    padding: 10,
-  },
-  scanHint: {
-    color: COLORS.white,
-    fontSize: 12,
-    textAlign: 'center',
-  },
-  bottomSection: {
-    padding: 16,
-    alignItems: 'center',
-  },
-  lastScan: {
-    backgroundColor: COLORS.green,
+  inputBox: {
+    backgroundColor: '#FFF',
+    margin: 12,
     padding: 12,
     borderRadius: 8,
-    marginBottom: 16,
-    width: '100%',
   },
-  lastScanLabel: {
-    color: COLORS.white,
-    fontSize: 12,
+  input: {
+    borderWidth: 1,
+    borderColor: '#DDD',
+    borderRadius: 6,
+    padding: 12,
+    fontSize: 16,
+    marginBottom: 10,
   },
-  lastScanCode: {
-    color: COLORS.white,
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  captureButton: {
-    backgroundColor: COLORS.primary,
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    justifyContent: 'center',
+  btn: {
+    backgroundColor: '#D00000',
+    padding: 14,
+    borderRadius: 6,
     alignItems: 'center',
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
   },
-  captureButtonDisabled: {
-    backgroundColor: COLORS.gray,
-  },
-  captureButtonText: {
-    color: COLORS.white,
-    fontSize: 20,
+  btnText: {
+    color: '#FFF',
+    fontSize: 16,
     fontWeight: 'bold',
   },
-  historyList: {
-    flex: 1,
-    padding: 16,
+  list: {
+    padding: 12,
   },
-  historyItem: {
-    backgroundColor: COLORS.white,
-    padding: 16,
-    borderRadius: 8,
+  item: {
+    backgroundColor: '#FFF',
+    padding: 14,
+    borderRadius: 6,
     marginBottom: 8,
   },
-  historyCode: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: COLORS.text,
-    fontFamily: 'monospace',
-  },
-  emptyText: {
-    textAlign: 'center',
-    color: COLORS.gray,
+  code: {
     fontSize: 16,
+    fontWeight: '500',
+  },
+  empty: {
+    textAlign: 'center',
+    color: '#999',
     marginTop: 40,
   },
 });
