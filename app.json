@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "Keg Batch Scanner",
+    "slug": "keg-batch-scanner",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#D00000"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.abinbev.kegbatchscanner"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#D00000"
+      },
+      "package": "com.abinbev.kegbatchscanner",
+      "permissions": ["android.permission.CAMERA"]
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Keg Batch Scanner to access your camera for barcode scanning."
+        }
+      ]
+    ]
+  }
+}
