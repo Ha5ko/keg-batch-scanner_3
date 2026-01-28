@@ -20,7 +20,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // ========== CONFIGURATION ==========
 // Replace this URL with your Google Apps Script Web App URL
 // See google-apps-script/Code.gs for setup instructions
-const GOOGLE_SCRIPT_URL = 'YOUR_GOOGLE_SCRIPT_URL_HERE';
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/x/exec';
 const USER_EMAIL = 'x';
 // ===================================
 
