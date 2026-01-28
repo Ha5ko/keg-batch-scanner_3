@@ -1,4 +1,4 @@
-// Keg Batch Scanner - With Camera via Image Picker
+// Keg Batch Scanner - With Camera and OCR
 import React, { useState, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import {
@@ -10,15 +10,18 @@ import {
   Alert,
   FlatList,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
+import TextRecognition from '@react-native-ml-kit/text-recognition';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 function MainApp() {
   const [scannedCodes, setScannedCodes] = useState<string[]>([]);
   const [inputCode, setInputCode] = useState('');
   const [lastPhoto, setLastPhoto] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem('keg_codes')
@@ -27,6 +30,30 @@ function MainApp() {
       })
       .catch(() => {});
   }, []);
+
+  const findBatchCode = (text: string): string | null => {
+    // Look for patterns starting with L followed by digits and letters
+    // Examples: L5078MA 10:52, L5074BB, L5082RA 09:15
+    const lines = text.split('\n');
+
+    for (const line of lines) {
+      // Check if line contains a batch code starting with L
+      const match = line.match(/L\d{4}[A-Z]{2}(\s*\d{1,2}:\d{2})?/i);
+      if (match) {
+        return match[0].toUpperCase();
+      }
+    }
+
+    // Also check for L codes without the full pattern
+    for (const line of lines) {
+      const trimmed = line.trim().toUpperCase();
+      if (trimmed.startsWith('L') && trimmed.length >= 5) {
+        return trimmed;
+      }
+    }
+
+    return null;
+  };
 
   const takePhoto = async () => {
     // Request camera permission
@@ -44,9 +71,33 @@ function MainApp() {
     });
 
     if (!result.canceled && result.assets[0]) {
-      setLastPhoto(result.assets[0].uri);
-      // Photo captured - user can now type the code they see
-      Alert.alert('Photo Captured', 'Now type the batch code you see in the photo');
+      const photoUri = result.assets[0].uri;
+      setLastPhoto(photoUri);
+      setIsProcessing(true);
+
+      try {
+        // Run OCR on the captured image
+        const ocrResult = await TextRecognition.recognize(photoUri);
+        const detectedText = ocrResult.text;
+
+        // Try to find a batch code in the detected text
+        const batchCode = findBatchCode(detectedText);
+
+        if (batchCode) {
+          setInputCode(batchCode);
+          Alert.alert('Code Detected!', `Found: ${batchCode}\n\nEdit if needed, then tap SAVE CODE`);
+        } else {
+          Alert.alert(
+            'No Code Found',
+            'Could not detect batch code.\nPlease type it manually.\n\nDetected text:\n' +
+            (detectedText.substring(0, 100) || '(none)')
+          );
+        }
+      } catch (error) {
+        Alert.alert('OCR Error', 'Could not read text from image. Please type the code manually.');
+      } finally {
+        setIsProcessing(false);
+      }
     }
   };
 
@@ -102,21 +153,31 @@ function MainApp() {
       </View>
 
       {/* Camera Button */}
-      <TouchableOpacity style={styles.cameraBtn} onPress={takePhoto}>
-        <Text style={styles.cameraBtnText}>TAKE PHOTO OF BATCH CODE</Text>
+      <TouchableOpacity
+        style={[styles.cameraBtn, isProcessing && styles.cameraBtnDisabled]}
+        onPress={takePhoto}
+        disabled={isProcessing}
+      >
+        {isProcessing ? (
+          <View style={styles.processingRow}>
+            <ActivityIndicator color="#FFF" size="small" />
+            <Text style={styles.cameraBtnText}>  READING TEXT...</Text>
+          </View>
+        ) : (
+          <Text style={styles.cameraBtnText}>TAKE PHOTO OF BATCH CODE</Text>
+        )}
       </TouchableOpacity>
 
       {/* Last Photo Preview */}
       {lastPhoto && (
         <View style={styles.photoContainer}>
           <Image source={{ uri: lastPhoto }} style={styles.photoPreview} />
-          <Text style={styles.photoHint}>Type the code you see above</Text>
         </View>
       )}
 
       {/* Manual Entry */}
       <View style={styles.inputBox}>
-        <Text style={styles.label}>Enter Batch Code:</Text>
+        <Text style={styles.label}>Batch Code:</Text>
         <TextInput
           style={styles.input}
           value={inputCode}
@@ -173,7 +234,14 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
   },
+  cameraBtnDisabled: {
+    backgroundColor: '#888',
+  },
   cameraBtnText: { color: '#FFF', fontSize: 18, fontWeight: 'bold' },
+  processingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   photoContainer: {
     marginHorizontal: 12,
     marginBottom: 12,
@@ -184,11 +252,6 @@ const styles = StyleSheet.create({
     height: 150,
     borderRadius: 8,
     backgroundColor: '#000',
-  },
-  photoHint: {
-    marginTop: 8,
-    color: '#666',
-    fontSize: 14,
   },
   inputBox: {
     backgroundColor: '#FFF',
