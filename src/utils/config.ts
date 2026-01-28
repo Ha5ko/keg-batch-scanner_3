@@ -2,7 +2,7 @@
 
 // IMPORTANT: Replace this URL with your deployed Google Apps Script Web App URL
 // See SETUP.md for instructions on how to deploy the Google Apps Script
-export const GOOGLE_SCRIPT_URL = 'YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE';
+export const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/x/exec';
 
 // User configuration
 export const USER_EMAIL = 'x';
