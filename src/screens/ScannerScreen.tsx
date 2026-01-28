@@ -1,6 +1,6 @@
 // Main scanner screen with camera and barcode detection
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,7 @@ import {
 import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
 import {
   Header,
-  StatusBar,
+  SyncStatusBar,
   ScanFeedback,
   ScanCounter,
   HistoryList,
@@ -38,22 +38,24 @@ export const ScannerScreen: React.FC = () => {
 
   const {
     isSyncing,
-    lastSyncTime,
     pendingCount: syncPending,
     isOnline,
     syncNow,
-    refreshPendingCount,
   } = useSync();
 
-  // Use the max of both pending counts (they should match, but just in case)
+  // Use the max of both pending counts
   const pendingCount = Math.max(scannerPending, syncPending);
 
   // Load history when modal opens
   const loadHistory = async () => {
-    const pending = await StorageService.getPendingScans();
-    const history = await StorageService.getScanHistory();
-    // Show pending first, then synced history
-    setHistoryScans([...pending, ...history]);
+    try {
+      const pending = await StorageService.getPendingScans();
+      const history = await StorageService.getScanHistory();
+      setHistoryScans([...pending, ...history]);
+    } catch (error) {
+      console.log('Error loading history:', error);
+      setHistoryScans([]);
+    }
   };
 
   const handleHistoryPress = async () => {
@@ -62,11 +64,15 @@ export const ScannerScreen: React.FC = () => {
   };
 
   const handleSyncPress = async () => {
-    const result = await syncNow();
-    if (!result.success && result.message) {
-      Alert.alert('Sync Status', result.message);
-    } else if (result.success && result.syncedCount > 0) {
-      Alert.alert('Sync Complete', `Synced ${result.syncedCount} scan(s)`);
+    try {
+      const result = await syncNow();
+      if (!result.success && result.message) {
+        Alert.alert('Sync Status', result.message);
+      } else if (result.success && result.syncedCount > 0) {
+        Alert.alert('Sync Complete', `Synced ${result.syncedCount} scan(s)`);
+      }
+    } catch (error) {
+      Alert.alert('Sync Error', 'Failed to sync. Please try again.');
     }
   };
 
@@ -83,7 +89,7 @@ export const ScannerScreen: React.FC = () => {
       <View style={styles.container}>
         <Header title="Keg Scanner" showHistory={false} />
         <View style={styles.centered}>
-          <Text style={styles.message}>Loading camera...</Text>
+          <Text style={styles.message}>Loading...</Text>
         </View>
       </View>
     );
@@ -110,10 +116,9 @@ export const ScannerScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       <Header title="Keg Scanner" onHistoryPress={handleHistoryPress} />
-      <StatusBar
+      <SyncStatusBar
         isOnline={isOnline}
         pendingCount={pendingCount}
-        lastSyncTime={lastSyncTime}
         isSyncing={isSyncing}
         onSyncPress={handleSyncPress}
       />
@@ -134,7 +139,6 @@ export const ScannerScreen: React.FC = () => {
               'itf14',
               'upc_a',
               'upc_e',
-              'datamatrix',
               'pdf417',
             ],
           }}
