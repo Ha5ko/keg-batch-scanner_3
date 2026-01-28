@@ -21,7 +21,16 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#D00000"
       },
-      "package": "com.abinbev.kegbatchscanner"
-    }
+      "package": "com.abinbev.kegbatchscanner",
+      "permissions": ["android.permission.CAMERA"]
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Keg Scanner to use camera"
+        }
+      ]
+    ]
   }
 }
