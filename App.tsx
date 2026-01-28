@@ -40,24 +40,28 @@ function MainApp() {
   }, []);
 
   const findBatchCode = (text: string): string | null => {
-    // Look for patterns starting with L followed by digits and letters
+    // Look for patterns starting with L followed by 4 digits and 2 letters
     // Examples: L5078MA 10:52, L5074BB, L5082RA 09:15
-    const lines = text.split('\n');
+    // Only extract from "L" onwards, ignoring any text before it
 
-    for (const line of lines) {
-      // Check if line contains a batch code starting with L
-      const match = line.match(/L\d{4}[A-Z]{2}(\s*\d{1,2}:\d{2})?/i);
-      if (match) {
-        return match[0].toUpperCase();
-      }
+    const allText = text.toUpperCase();
+
+    // Primary pattern: L + 4 digits + 2 letters + optional time
+    // This will match: L5078MA, L5078MA 10:52, L5078MA10:52
+    const fullPattern = /L\d{4}[A-Z]{2}(\s*\d{1,2}:\d{2})?/g;
+    const matches = allText.match(fullPattern);
+
+    if (matches && matches.length > 0) {
+      // Return the first valid match, cleaned up
+      return matches[0].trim();
     }
 
-    // Also check for L codes without the full pattern
-    for (const line of lines) {
-      const trimmed = line.trim().toUpperCase();
-      if (trimmed.startsWith('L') && trimmed.length >= 5) {
-        return trimmed;
-      }
+    // Fallback: Look for any L followed by at least 4 digits and 2 letters
+    const fallbackPattern = /L\d{4}[A-Z]{2}/g;
+    const fallbackMatches = allText.match(fallbackPattern);
+
+    if (fallbackMatches && fallbackMatches.length > 0) {
+      return fallbackMatches[0];
     }
 
     return null;
@@ -104,11 +108,12 @@ function MainApp() {
       return;
     }
 
-    // Launch camera
+    // Launch camera with crop enabled
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.8,
-      allowsEditing: false,
+      quality: 1.0,
+      allowsEditing: true,
+      aspect: [4, 1], // Wide aspect ratio to focus on batch code line
     });
 
     if (!result.canceled && result.assets[0]) {
@@ -228,7 +233,10 @@ function MainApp() {
             <Text style={styles.cameraBtnText}>  READING TEXT...</Text>
           </View>
         ) : (
-          <Text style={styles.cameraBtnText}>TAKE PHOTO OF BATCH CODE</Text>
+          <>
+            <Text style={styles.cameraBtnText}>TAKE PHOTO OF BATCH CODE</Text>
+            <Text style={styles.cameraHint}>Crop to batch code after capture</Text>
+          </>
         )}
       </TouchableOpacity>
 
@@ -324,6 +332,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#888',
   },
   cameraBtnText: { color: '#FFF', fontSize: 18, fontWeight: 'bold' },
+  cameraHint: { color: '#FFF', fontSize: 12, marginTop: 4, opacity: 0.8 },
   processingRow: {
     flexDirection: 'row',
     alignItems: 'center',
