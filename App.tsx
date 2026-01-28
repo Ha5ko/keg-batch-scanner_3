@@ -1,5 +1,5 @@
-// Keg Batch Scanner - OCR for printed batch codes
-import React, { useState, useEffect, useRef } from 'react';
+// Keg Batch Scanner - Camera assist with manual entry
+import React, { useState, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import {
   View,
@@ -9,39 +9,19 @@ import {
   TextInput,
   Alert,
   FlatList,
-  ActivityIndicator,
   Modal,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import TextRecognition from '@react-native-ml-kit/text-recognition';
-import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-// Extract batch code starting with L from OCR text
-const extractBatchCode = (text: string): string | null => {
-  const lines = text.split('\n');
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (/^L[0-9]/i.test(trimmed)) {
-      return trimmed;
-    }
-  }
-  const match = text.match(/L[0-9][A-Z0-9\s:]+/i);
-  if (match) {
-    return match[0].trim();
-  }
-  return null;
-};
 
 function MainApp() {
   const [permission, requestPermission] = useCameraPermissions();
   const [scannedCodes, setScannedCodes] = useState<string[]>([]);
-  const [manualCode, setManualCode] = useState('');
-  const [isScanning, setIsScanning] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [lastScanned, setLastScanned] = useState<string | null>(null);
-  const cameraRef = useRef<any>(null);
+  const [inputCode, setInputCode] = useState('');
+  const [showCamera, setShowCamera] = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem('keg_codes')
@@ -51,109 +31,88 @@ function MainApp() {
       .catch(() => {});
   }, []);
 
-  const saveCode = async (code: string, fromOCR = false) => {
-    const cleaned = code.trim().toUpperCase();
-    if (!cleaned) {
+  const saveCode = async () => {
+    const code = inputCode.trim().toUpperCase();
+    if (!code) {
       Alert.alert('Error', 'Enter a batch code');
-      return false;
+      return;
     }
 
-    if (scannedCodes.includes(cleaned)) {
-      Alert.alert('Duplicate', `${cleaned} already scanned`);
-      return false;
+    if (scannedCodes.includes(code)) {
+      Alert.alert('Duplicate', `${code} already scanned`);
+      return;
     }
 
-    const updated = [cleaned, ...scannedCodes];
+    const updated = [code, ...scannedCodes];
     setScannedCodes(updated);
-    setLastScanned(cleaned);
-    if (!fromOCR) setManualCode('');
-
-    try {
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch {}
+    setInputCode('');
 
     try {
       await AsyncStorage.setItem('keg_codes', JSON.stringify(updated));
-      Alert.alert('Saved!', cleaned);
-      return true;
+      Alert.alert('Saved!', code);
     } catch {
       Alert.alert('Error', 'Save failed');
-      return false;
     }
   };
 
-  const captureAndScan = async () => {
-    if (!cameraRef.current || isProcessing) return;
-    setIsProcessing(true);
-
-    try {
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.8,
-        base64: false,
-      });
-
-      const result = await TextRecognition.recognize(photo.uri);
-      const batchCode = extractBatchCode(result.text);
-
-      if (batchCode) {
-        await saveCode(batchCode, true);
-      } else {
-        try {
-          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        } catch {}
-        Alert.alert(
-          'Not Found',
-          'No batch code starting with "L" detected. Try better lighting or closer position.'
-        );
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to scan. Please try again.');
-    } finally {
-      setIsProcessing(false);
-    }
+  const clearAll = () => {
+    Alert.alert('Clear All', 'Delete all scanned codes?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Clear',
+        style: 'destructive',
+        onPress: async () => {
+          setScannedCodes([]);
+          await AsyncStorage.removeItem('keg_codes');
+        },
+      },
+    ]);
   };
 
-  // Camera scanner modal
-  const renderScanner = () => (
-    <Modal visible={isScanning} animationType="slide">
-      <SafeAreaView style={styles.scannerContainer} edges={['top']}>
-        <View style={styles.scannerHeader}>
-          <Text style={styles.scannerTitle}>Scan Batch Code</Text>
-          <TouchableOpacity onPress={() => setIsScanning(false)}>
-            <Text style={styles.closeBtn}>Close</Text>
+  // Camera modal for visual assistance
+  const renderCameraModal = () => (
+    <Modal visible={showCamera} animationType="slide">
+      <SafeAreaView style={styles.cameraModal} edges={['top', 'bottom']}>
+        <View style={styles.cameraHeader}>
+          <Text style={styles.cameraTitle}>View Batch Code</Text>
+          <TouchableOpacity onPress={() => setShowCamera(false)}>
+            <Text style={styles.closeBtn}>Done</Text>
           </TouchableOpacity>
         </View>
 
         {permission?.granted ? (
           <View style={styles.cameraContainer}>
-            <CameraView ref={cameraRef} style={styles.camera} facing="back">
+            <CameraView style={styles.camera} facing="back">
               <View style={styles.overlay}>
-                <View style={styles.scanFrame}>
-                  <Text style={styles.scanHint}>
-                    Position batch code (L...) here
-                  </Text>
+                <View style={styles.frame}>
+                  <Text style={styles.frameText}>Position batch code here</Text>
                 </View>
               </View>
             </CameraView>
 
-            <TouchableOpacity
-              style={[styles.captureBtn, isProcessing && styles.captureBtnDisabled]}
-              onPress={captureAndScan}
-              disabled={isProcessing}
+            {/* Input at bottom of camera */}
+            <KeyboardAvoidingView
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+              style={styles.cameraInputContainer}
             >
-              {isProcessing ? (
-                <ActivityIndicator color="#FFF" />
-              ) : (
-                <Text style={styles.captureBtnText}>SCAN</Text>
-              )}
-            </TouchableOpacity>
-
-            {lastScanned && (
-              <View style={styles.lastScannedBox}>
-                <Text style={styles.lastScannedLabel}>Last: </Text>
-                <Text style={styles.lastScannedCode}>{lastScanned}</Text>
+              <Text style={styles.cameraInputLabel}>Type the code you see:</Text>
+              <View style={styles.cameraInputRow}>
+                <TextInput
+                  style={styles.cameraInput}
+                  value={inputCode}
+                  onChangeText={setInputCode}
+                  placeholder="L5078MA 10:52"
+                  placeholderTextColor="#999"
+                  autoCapitalize="characters"
+                  autoFocus
+                />
+                <TouchableOpacity style={styles.cameraSaveBtn} onPress={() => {
+                  saveCode();
+                }}>
+                  <Text style={styles.cameraSaveBtnText}>SAVE</Text>
+                </TouchableOpacity>
               </View>
-            )}
+            </KeyboardAvoidingView>
           </View>
         ) : (
           <View style={styles.noPermission}>
@@ -173,27 +132,30 @@ function MainApp() {
 
       <View style={styles.header}>
         <Text style={styles.title}>Keg Scanner</Text>
-        <Text style={styles.count}>{scannedCodes.length}</Text>
+        <TouchableOpacity onPress={clearAll}>
+          <Text style={styles.headerBtn}>{scannedCodes.length} scans</Text>
+        </TouchableOpacity>
       </View>
 
-      {/* Scan Button */}
-      <TouchableOpacity style={styles.scanBtn} onPress={() => setIsScanning(true)}>
-        <Text style={styles.scanBtnText}>OPEN CAMERA SCANNER</Text>
+      {/* Open Camera Button */}
+      <TouchableOpacity style={styles.cameraBtn} onPress={() => setShowCamera(true)}>
+        <Text style={styles.cameraBtnText}>📷  OPEN CAMERA</Text>
+        <Text style={styles.cameraBtnSub}>Use camera to view & enter code</Text>
       </TouchableOpacity>
 
       {/* Manual Entry */}
       <View style={styles.manualBox}>
-        <Text style={styles.manualLabel}>Or enter manually:</Text>
+        <Text style={styles.manualLabel}>Or enter directly:</Text>
         <View style={styles.manualRow}>
           <TextInput
             style={styles.input}
-            value={manualCode}
-            onChangeText={setManualCode}
+            value={inputCode}
+            onChangeText={setInputCode}
             placeholder="L5078MA 10:52"
             placeholderTextColor="#999"
             autoCapitalize="characters"
           />
-          <TouchableOpacity style={styles.addBtn} onPress={() => saveCode(manualCode)}>
+          <TouchableOpacity style={styles.addBtn} onPress={saveCode}>
             <Text style={styles.addBtnText}>ADD</Text>
           </TouchableOpacity>
         </View>
@@ -213,7 +175,7 @@ function MainApp() {
         )}
       />
 
-      {renderScanner()}
+      {renderCameraModal()}
     </SafeAreaView>
   );
 }
@@ -236,15 +198,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   title: { color: '#FFF', fontSize: 22, fontWeight: 'bold' },
-  count: { color: '#FFF', fontSize: 18, fontWeight: '600' },
-  scanBtn: {
+  headerBtn: { color: '#FFF', fontSize: 16 },
+
+  cameraBtn: {
     backgroundColor: '#D00000',
     margin: 12,
-    padding: 18,
-    borderRadius: 8,
+    padding: 20,
+    borderRadius: 12,
     alignItems: 'center',
   },
-  scanBtnText: { color: '#FFF', fontSize: 18, fontWeight: 'bold' },
+  cameraBtnText: { color: '#FFF', fontSize: 20, fontWeight: 'bold' },
+  cameraBtnSub: { color: 'rgba(255,255,255,0.8)', fontSize: 14, marginTop: 4 },
+
   manualBox: {
     backgroundColor: '#FFF',
     marginHorizontal: 12,
@@ -269,6 +234,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   addBtnText: { color: '#FFF', fontWeight: 'bold' },
+
   historyTitle: {
     fontSize: 16,
     fontWeight: '600',
@@ -276,7 +242,7 @@ const styles = StyleSheet.create({
     margin: 12,
     marginBottom: 4,
   },
-  list: { paddingHorizontal: 12 },
+  list: { paddingHorizontal: 12, paddingBottom: 20 },
   item: {
     backgroundColor: '#FFF',
     padding: 14,
@@ -286,16 +252,16 @@ const styles = StyleSheet.create({
   code: { fontSize: 16, fontWeight: '500', fontFamily: 'monospace' },
   empty: { textAlign: 'center', color: '#999', marginTop: 20 },
 
-  // Scanner Modal
-  scannerContainer: { flex: 1, backgroundColor: '#000' },
-  scannerHeader: {
+  // Camera Modal
+  cameraModal: { flex: 1, backgroundColor: '#000' },
+  cameraHeader: {
     backgroundColor: '#D00000',
     padding: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  scannerTitle: { color: '#FFF', fontSize: 20, fontWeight: 'bold' },
+  cameraTitle: { color: '#FFF', fontSize: 20, fontWeight: 'bold' },
   closeBtn: { color: '#FFF', fontSize: 16, fontWeight: '600' },
   cameraContainer: { flex: 1 },
   camera: { flex: 1 },
@@ -303,44 +269,42 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.4)',
   },
-  scanFrame: {
+  frame: {
     width: 300,
-    height: 120,
+    height: 100,
     borderWidth: 3,
     borderColor: '#D00000',
     borderRadius: 8,
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    paddingBottom: 8,
-  },
-  scanHint: { color: '#FFF', fontSize: 12 },
-  captureBtn: {
-    position: 'absolute',
-    bottom: 40,
-    alignSelf: 'center',
-    backgroundColor: '#D00000',
-    width: 100,
-    height: 100,
-    borderRadius: 50,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.3)',
   },
-  captureBtnDisabled: { backgroundColor: '#666' },
-  captureBtnText: { color: '#FFF', fontSize: 18, fontWeight: 'bold' },
-  lastScannedBox: {
-    position: 'absolute',
-    bottom: 160,
-    alignSelf: 'center',
-    backgroundColor: '#28A745',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+  frameText: { color: '#FFF', fontSize: 14 },
+
+  cameraInputContainer: {
+    backgroundColor: '#FFF',
+    padding: 16,
+  },
+  cameraInputLabel: { fontSize: 14, color: '#666', marginBottom: 8 },
+  cameraInputRow: { flexDirection: 'row' },
+  cameraInput: {
+    flex: 1,
+    borderWidth: 2,
+    borderColor: '#D00000',
     borderRadius: 6,
-    flexDirection: 'row',
+    padding: 14,
+    fontSize: 18,
+    marginRight: 8,
   },
-  lastScannedLabel: { color: '#FFF', fontSize: 14 },
-  lastScannedCode: { color: '#FFF', fontSize: 14, fontWeight: 'bold' },
+  cameraSaveBtn: {
+    backgroundColor: '#D00000',
+    paddingHorizontal: 24,
+    justifyContent: 'center',
+    borderRadius: 6,
+  },
+  cameraSaveBtnText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
+
   noPermission: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   noPermissionText: { color: '#FFF', fontSize: 18, marginBottom: 20 },
   permissionBtn: { backgroundColor: '#D00000', padding: 16, borderRadius: 8 },
