@@ -67,15 +67,16 @@ function handleAddScans(data) {
     if (!sheet) {
       sheet = ss.insertSheet(SHEET_NAME);
       // Add headers
-      sheet.getRange(1, 1, 1, 5).setValues([[
+      sheet.getRange(1, 1, 1, 6).setValues([[
         'Scan ID',
         'Batch Code',
         'Scan Timestamp',
         'Synced At',
-        'User Email'
+        'User Email',
+        'Device'
       ]]);
       // Format header row
-      sheet.getRange(1, 1, 1, 5)
+      sheet.getRange(1, 1, 1, 6)
         .setFontWeight('bold')
         .setBackground('#D00000')
         .setFontColor('#FFFFFF');
@@ -87,10 +88,12 @@ function handleAddScans(data) {
       sheet.setColumnWidth(3, 180);
       sheet.setColumnWidth(4, 180);
       sheet.setColumnWidth(5, 250);
+      sheet.setColumnWidth(6, 200);
     }
 
     const scans = data.scans || [];
     const email = data.email || 'Unknown';
+    const device = data.device || 'Unknown';
     const syncedAt = new Date().toISOString();
 
     if (scans.length === 0) {
@@ -107,12 +110,13 @@ function handleAddScans(data) {
       scan.batchCode,
       scan.timestamp,
       syncedAt,
-      email
+      email,
+      device
     ]);
 
     // Append all rows at once
     const lastRow = sheet.getLastRow();
-    sheet.getRange(lastRow + 1, 1, rows.length, 5).setValues(rows);
+    sheet.getRange(lastRow + 1, 1, rows.length, 6).setValues(rows);
 
     return createJsonResponse({
       success: true,

@@ -13,6 +13,7 @@
   "dependencies": {
     "@react-native-ml-kit/text-recognition": "^1.0.2",
     "expo": "~50.0.0",
+    "expo-device": "~5.9.4",
     "expo-image-picker": "~14.7.1",
     "expo-status-bar": "~1.11.0",
     "react": "18.2.0",

@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
+import * as Device from 'expo-device';
 import TextRecognition from '@react-native-ml-kit/text-recognition';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -74,9 +75,13 @@ function MainApp() {
     }
 
     try {
+      // Get device info
+      const deviceInfo = `${Device.brand || ''} ${Device.modelName || 'Unknown'}`.trim();
+
       const scanData = {
         action: 'addScans',
         email: USER_EMAIL,
+        device: deviceInfo,
         scans: [{
           id: `scan-${Date.now()}`,
           batchCode: batchCode,
