@@ -18,6 +18,16 @@ android/
 .env.local
 .env.production
 
+# Signing keys and credentials (NEVER commit these)
+*.keystore
+*.jks
+*.p12
+*.key
+*.pem
+google-services.json
+play-store-credentials.json
+service-account-key.json
+
 # IDE
 .idea/
 .vscode/
