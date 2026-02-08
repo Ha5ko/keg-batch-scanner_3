@@ -1,263 +1,518 @@
 # Android Signing, Verification & Publishing Guide
 
-This guide covers how to digitally sign, verify, and publish the Keg Batch Scanner Android app using **Expo Application Services (EAS)**.
+Complete first-time walkthrough for building, signing, verifying, and publishing the **Keg Batch Scanner** Android app to the Google Play Store.
 
 ---
 
-## Overview
+## What You Need Before Starting
 
-| Step | Tool | Command |
-|------|------|---------|
-| Sign & Build | EAS Build | `npm run build:production` |
-| Verify signature | `jarsigner` / `apksigner` | See below |
-| Publish to Play Store | EAS Submit | `npm run submit:android` |
-| Build + Publish in one step | EAS Build | `npm run build-and-submit` |
+You will need all of the following. If you don't have them yet, follow each step below.
 
----
-
-## Prerequisites
-
-1. **Expo account** - Sign up at https://expo.dev
-2. **EAS CLI** installed globally:
-   ```bash
-   npm install -g eas-cli
-   eas login
-   ```
-3. **Google Play Console** account (for publishing)
-4. **EAS project linked** - Run once after cloning:
-   ```bash
-   eas init
-   ```
-   This populates the `projectId` in `app.json`.
+| Requirement | Cost | Where to get it |
+|-------------|------|-----------------|
+| An **Expo account** | Free | https://expo.dev/signup |
+| **Node.js 18+** installed | Free | https://nodejs.org |
+| A **Google Play Developer account** | $25 one-time fee | https://play.google.com/console/signup |
+| A **Google Cloud project** (for API access) | Free | Created during setup below |
+| **Java JDK** (only needed to verify signatures locally) | Free | `sudo apt install default-jdk` or https://adoptium.net |
 
 ---
 
-## 1. Digital Signing
+## Phase 1: Account & Project Setup
 
-### How signing works with EAS
+### Step 1.1 - Create your Expo account
 
-EAS Build manages your Android signing credentials (keystore) securely in the cloud. When you run a production build, EAS:
+1. Go to https://expo.dev/signup
+2. Sign up with email or GitHub
+3. Remember your username -- you'll need it later
 
-1. Generates an **upload keystore** (or uses one you provide)
-2. Signs the `.aab` (Android App Bundle) with that keystore
-3. Stores the keystore encrypted on Expo's servers
+### Step 1.2 - Install the EAS CLI
 
-### Option A: Let EAS manage your keystore (recommended)
+Open your terminal and run:
+
+```bash
+npm install -g eas-cli
+```
+
+Verify it installed:
+
+```bash
+eas --version
+```
+
+You should see something like `eas-cli/12.x.x`.
+
+### Step 1.3 - Log in to Expo from your terminal
+
+```bash
+eas login
+```
+
+Enter the email and password from Step 1.1. You'll see:
+
+```
+Logged in as your-username
+```
+
+### Step 1.4 - Link this project to your Expo account
+
+Navigate to the project directory and run:
+
+```bash
+cd /path/to/keg-batch-scanner3
+eas init
+```
+
+This will:
+- Create a project on your Expo account called "keg-batch-scanner"
+- Automatically fill in the `projectId` field in `app.json` (line 41)
+
+You'll see output like:
+
+```
+Linked to project @your-username/keg-batch-scanner (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+```
+
+**Commit this change** -- the `projectId` in `app.json` should be in version control.
+
+---
+
+## Phase 2: Signing Your App
+
+Android apps must be signed with a cryptographic key before they can be installed or published. EAS handles this for you.
+
+### Step 2.1 - Build a signed production app bundle
+
+Run:
 
 ```bash
 npm run build:production
 ```
 
-On first run, EAS will prompt you to generate a new keystore. Select **"Generate new keystore"**. EAS stores it securely and uses it for all future builds.
+This runs: `eas build --platform android --profile production`
 
-### Option B: Use your own keystore
+**What happens on first run:**
 
-1. Generate a keystore locally:
-   ```bash
-   keytool -genkeypair -v \
-     -storetype JKS \
-     -keyalg RSA \
-     -keysize 2048 \
-     -validity 10000 \
-     -storepass YOUR_STORE_PASSWORD \
-     -keypass YOUR_KEY_PASSWORD \
-     -alias keg-batch-scanner \
-     -keystore keg-batch-scanner.keystore \
-     -dname "CN=AB InBev, OU=Engineering, O=AB InBev, L=New York, ST=NY, C=US"
-   ```
+EAS will ask you about signing credentials. You'll see prompts like this:
 
-2. Upload it to EAS:
-   ```bash
-   npm run credentials:setup
-   ```
-   Select **"Update existing credentials"** > **"Keystore"** > provide the `.keystore` file and passwords.
-
-3. **NEVER commit the keystore to git.** The `.gitignore` already excludes `*.keystore` and `*.jks` files.
-
-### Option C: Build locally with signing
-
-```bash
-npm run build:production:local
+```
+No credentials found for com.abinbev.kegbatchscanner.
+Generate a new Android Keystore? (Y/n)
 ```
 
-This builds the signed `.aab` on your local machine. EAS will still use its managed credentials.
+**Type `Y` and press Enter.**
+
+EAS will:
+1. Generate a new Android Keystore (the signing key)
+2. Encrypt it and store it securely on Expo's servers
+3. Start building your app in the cloud
+4. Sign the `.aab` (Android App Bundle) with that keystore
+
+You'll see a URL like:
+
+```
+Build started: https://expo.dev/accounts/your-username/projects/keg-batch-scanner/builds/xxxxxxxx
+```
+
+**The build takes 5-15 minutes.** You can:
+- Watch the progress at that URL in your browser
+- Or wait in the terminal -- it will notify you when done
+
+When finished, you'll see:
+
+```
+Build finished.
+https://expo.dev/artifacts/eas/xxxxxxxx.aab
+```
+
+**That `.aab` file is your signed app.** Click the link to download it.
+
+### Step 2.2 - Verify your credentials are saved
+
+Run:
+
+```bash
+npm run credentials:info
+```
+
+You'll see details about your stored keystore:
+
+```
+Android Credentials (com.abinbev.kegbatchscanner)
+  Keystore:
+    Type:          JKS
+    Key Alias:     xxxxxxxxxxxxxxxx
+    MD5:           XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX
+    SHA1:          XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX
+    SHA256:        XX:XX:XX:XX:...
+```
+
+**Save the SHA1 and SHA256 fingerprints somewhere safe** -- Google Play will show these to verify your app's identity.
+
+### Alternative: Build a test APK first (optional)
+
+If you want to build a test APK to sideload on a device before publishing:
+
+```bash
+npm run build:apk
+```
+
+This builds a `.apk` file (not `.aab`) that you can install directly on a phone.
 
 ---
 
-## 2. Verifying the Signature
+## Phase 3: Verifying the Signature
 
-After building, download the artifact from the EAS dashboard or via CLI.
+After downloading the built `.aab` or `.apk` file, you can verify it was properly signed.
 
-### Verify an AAB (App Bundle)
+### Step 3.1 - Verify an AAB file
 
 ```bash
-# Download the latest build
-eas build:list --platform android --limit 1
-
-# Verify with jarsigner
-jarsigner -verify -verbose -certs path/to/app.aab
+jarsigner -verify -verbose -certs ~/Downloads/your-app.aab
 ```
 
-Expected output should include:
+Look for this line in the output:
+
 ```
 jar verified.
 ```
 
-### Verify an APK
+If you see `jar verified`, the app is correctly signed.
+
+### Step 3.2 - Verify an APK file
+
+If you built an APK instead:
 
 ```bash
-# If you have Android SDK build-tools installed:
-apksigner verify --print-certs path/to/app.apk
+# Option A: Using jarsigner (comes with Java JDK)
+jarsigner -verify -verbose -certs ~/Downloads/your-app.apk
 
-# Or with jarsigner:
-jarsigner -verify -verbose -certs path/to/app.apk
+# Option B: Using apksigner (comes with Android SDK build-tools)
+# Only available if you have Android Studio installed
+apksigner verify --print-certs ~/Downloads/your-app.apk
 ```
 
-### View keystore details
+### Step 3.3 - View signing certificate details
+
+To see the full certificate details of a signed file:
 
 ```bash
-# View what credentials EAS is using
-npm run credentials:info
-
-# View local keystore details (if using your own)
-keytool -list -v -keystore keg-batch-scanner.keystore
+jarsigner -verify -verbose -certs ~/Downloads/your-app.aab 2>&1 | grep -A5 "Certificate"
 ```
+
+This shows who signed it and when the certificate expires.
 
 ---
 
-## 3. Publishing to Google Play Store
+## Phase 4: Publishing to Google Play Store
 
-### One-time setup
+### Step 4.1 - Create a Google Play Developer account
 
-#### A. Create a Google Cloud Service Account
+1. Go to https://play.google.com/console/signup
+2. Sign in with a Google account (use a company/team account, not personal)
+3. Pay the **$25 one-time registration fee**
+4. Complete the account verification (may take 24-48 hours)
 
-1. Go to [Google Play Console](https://play.google.com/console) > **Setup** > **API access**
-2. Link to a Google Cloud project (or create one)
-3. Click **Create new service account**
-4. In Google Cloud Console:
-   - Create the service account
-   - Grant role: **Service Account User**
-   - Create a JSON key and download it
-5. Back in Play Console, grant the service account **Release manager** permissions
-6. Save the JSON key as `play-store-credentials.json` in the project root (it is gitignored)
+### Step 4.2 - Create your app in the Play Console
 
-#### B. Set up GitHub secrets (for CI/CD)
+1. Log in to https://play.google.com/console
+2. Click **"Create app"** (blue button, top right)
+3. Fill in:
+   - **App name**: `Keg Batch Scanner`
+   - **Default language**: English (United States)
+   - **App or game**: App
+   - **Free or paid**: Free (or Paid, your choice)
+   - Check all the declaration boxes
+4. Click **"Create app"**
 
-In your GitHub repo, go to **Settings** > **Secrets and variables** > **Actions** and add:
+### Step 4.3 - Complete the store listing
 
-| Secret | Value |
-|--------|-------|
-| `EXPO_TOKEN` | Your EAS access token (get from https://expo.dev/accounts/[account]/settings/access-tokens) |
-| `GOOGLE_SERVICE_ACCOUNT_KEY` | Contents of the `play-store-credentials.json` file |
+Google requires several things before you can publish. Navigate through the left sidebar:
 
-#### C. Create your app listing
+**Dashboard > Set up your app** -- Complete each required item:
 
-Before the first submission, you must create the app in Google Play Console:
+1. **App access** - Select "All functionality is available without special access" (or configure access if the app requires login)
+2. **Ads** - Select whether the app contains ads (probably "No")
+3. **Content rating** - Fill out the questionnaire (takes ~5 minutes)
+4. **Target audience** - Select age groups
+5. **News app** - Select "No"
+6. **Data safety** - Declare what data the app collects:
+   - The app uses the camera (for scanning batch codes)
+   - The app stores scan data locally on the device
+   - Fill out the form honestly based on what the app does
 
-1. Go to Play Console > **Create app**
-2. Use package name: `com.abinbev.kegbatchscanner`
-3. Complete the required store listing (title, description, screenshots, privacy policy)
-4. Create an **internal testing** track (this is where EAS will submit first)
+**Store listing** (left sidebar > **Main store listing**):
 
-### Submit manually
+1. **App name**: Keg Batch Scanner
+2. **Short description** (max 80 chars): `Scan and track keg batch codes with OCR technology`
+3. **Full description** (max 4000 chars): Write a description of what the app does
+4. **App icon**: Upload a 512x512 PNG (you can use the `assets/icon.png` from the project)
+5. **Feature graphic**: Upload a 1024x500 PNG banner image
+6. **Phone screenshots**: Upload at least 2 screenshots (take these from a running device or emulator)
+7. **Privacy policy URL**: You must provide a URL to a privacy policy page
+
+### Step 4.4 - Create an Internal Testing track
+
+1. In Play Console, go to **Testing > Internal testing** (left sidebar)
+2. Click **"Create new release"**
+3. For now, you can leave it empty -- EAS Submit will upload the AAB for you
+4. Click **"Save"** (not "Review release" yet)
+5. Under **Testers** tab, create an email list and add tester email addresses
+
+### Step 4.5 - Set up API access (so EAS can submit automatically)
+
+This is the most involved step. You're creating a "service account" that gives EAS permission to upload builds to your Play Console.
+
+**In Google Play Console:**
+
+1. Go to **Setup > API access** (left sidebar, near the bottom)
+2. If prompted, click **"Link"** to link to a Google Cloud project (or **"Create new project"**)
+3. Under **Service accounts**, click **"Create new service account"**
+4. A dialog appears telling you to go to Google Cloud Console. Click the **"Google Cloud Console"** link
+
+**In Google Cloud Console (new tab):**
+
+5. You should be on the Service Accounts page. Click **"+ CREATE SERVICE ACCOUNT"** (top)
+6. Fill in:
+   - **Name**: `play-store-publisher`
+   - **ID**: auto-fills as `play-store-publisher`
+   - **Description**: `Uploads builds to Google Play via EAS`
+7. Click **"CREATE AND CONTINUE"**
+8. For role, select **"Basic > Editor"** (or skip this and set permissions in Play Console instead)
+9. Click **"CONTINUE"**, then **"DONE"**
+10. Back on the Service Accounts list, find `play-store-publisher` and click the **three dots (...)** on the right > **"Manage keys"**
+11. Click **"ADD KEY" > "Create new key"**
+12. Select **"JSON"** and click **"CREATE"**
+13. **A JSON file downloads automatically.** This is your credentials file. Keep it safe.
+
+**Back in Google Play Console:**
+
+14. Click **"Done"** on the dialog
+15. Click **"Refresh service accounts"** -- your new service account should appear
+16. Click **"Grant access"** next to it
+17. Under **App permissions**, click **"Add app"** > select **"Keg Batch Scanner"** > **"Apply"**
+18. Under **Account permissions**, enable at minimum:
+    - **Releases** (all sub-permissions)
+    - **Store presence** > "Edit and delete draft apps"
+19. Click **"Invite user"** > **"Send invite"**
+
+### Step 4.6 - Save the credentials file to your project
+
+1. Rename the downloaded JSON file to `play-store-credentials.json`
+2. Move it to the root of this project:
 
 ```bash
-# Submit the latest production build to Google Play
+mv ~/Downloads/your-downloaded-file.json ./play-store-credentials.json
+```
+
+This file is already in `.gitignore` so it won't be committed. **Never share this file publicly.**
+
+### Step 4.7 - Submit your app to Google Play
+
+**Option A: Submit the latest build** (after you already ran `npm run build:production`)
+
+```bash
 npm run submit:android
 ```
 
-### Build and submit in one step
+EAS will:
+1. Find your latest production build
+2. Read `play-store-credentials.json`
+3. Upload the `.aab` to Google Play's internal testing track
+4. Report success or failure
+
+You'll see prompts like:
+
+```
+Submitting to Google Play Store (internal track)...
+Successfully submitted build to Google Play Store!
+```
+
+**Option B: Build and submit in one command**
 
 ```bash
 npm run build-and-submit
 ```
 
-### Submit via CI/CD
+This builds a fresh signed AAB and then immediately submits it.
 
-Push a version tag to trigger the GitHub Actions workflow:
+### Step 4.8 - Check the result in Play Console
 
-```bash
-git tag v1.0.0
-git push origin v1.0.0
-```
-
-Or trigger manually from the GitHub Actions tab using **"Run workflow"**.
+1. Go to Play Console > **Testing > Internal testing**
+2. You should see a new release with your uploaded AAB
+3. Click **"Review release"**
+4. Click **"Start rollout to Internal testing"**
+5. Internal testers (from Step 4.4) will receive an email/link to install the app
 
 ---
 
-## 4. Release Tracks
+## Phase 5: Promoting to Production (Public Release)
 
-The `eas.json` is configured to submit to the **internal** track by default. To change tracks, edit `eas.json`:
+Once you've tested via internal testing and are ready to go public:
+
+### Step 5.1 - Change the submission track
+
+Edit `eas.json` and change `"track"` from `"internal"` to `"production"`:
 
 ```json
 "submit": {
   "production": {
     "android": {
-      "track": "internal"       // internal testing (default)
-      // "track": "alpha"       // closed testing
-      // "track": "beta"        // open testing
-      // "track": "production"  // public release
+      "serviceAccountKeyPath": "./play-store-credentials.json",
+      "track": "production",
+      "releaseStatus": "draft",
+      "changesNotSentForReview": true
     }
   }
 }
 ```
 
-Recommended promotion path: **internal** -> **alpha/beta** -> **production**
+### Step 5.2 - Submit to production
+
+```bash
+npm run build-and-submit
+```
+
+### Step 5.3 - Finalize in Play Console
+
+1. Go to **Production** in Play Console
+2. Review the release
+3. Click **"Start rollout to Production"**
+4. Google reviews the app (typically 1-7 days for first submission)
 
 ---
 
-## 5. Version Management
+## Phase 6: Automated CI/CD with GitHub Actions
 
-Versions auto-increment on each production build (configured via `autoIncrement: true` in `eas.json`). To bump the user-facing version:
+The `.github/workflows/build-and-publish.yml` workflow automates everything above. Here's how to set it up.
+
+### Step 6.1 - Create an Expo access token
+
+1. Go to https://expo.dev
+2. Click your profile icon > **"Access tokens"** (or go to Account Settings > Access tokens)
+3. Click **"Create token"**
+4. Name it: `github-actions`
+5. Copy the token value (you won't see it again)
+
+### Step 6.2 - Add GitHub secrets
+
+1. Go to your GitHub repo: https://github.com/Ha5ko/keg-batch-scanner3
+2. Click **Settings** tab > **Secrets and variables** > **Actions** (left sidebar)
+3. Click **"New repository secret"** and add these two secrets:
+
+**Secret 1:**
+- **Name**: `EXPO_TOKEN`
+- **Value**: Paste the access token from Step 6.1
+
+**Secret 2:**
+- **Name**: `GOOGLE_SERVICE_ACCOUNT_KEY`
+- **Value**: Paste the **entire contents** of your `play-store-credentials.json` file
+  ```bash
+  # Copy the contents to your clipboard:
+  cat play-store-credentials.json | pbcopy    # macOS
+  cat play-store-credentials.json | xclip     # Linux
+  ```
+
+### Step 6.3 - Trigger a release
+
+**Automatic trigger** - Push a version tag:
 
 ```bash
-# Patch: 1.0.0 -> 1.0.1
+# Tag the current commit
+git tag v1.0.0
+
+# Push the tag to GitHub
+git push origin v1.0.0
+```
+
+This triggers the workflow to build, sign, and submit to the Play Store automatically.
+
+**Manual trigger:**
+
+1. Go to GitHub repo > **Actions** tab
+2. Click **"Build, Sign & Publish Android"** in the left sidebar
+3. Click **"Run workflow"**
+4. Choose profile (`production` or `preview`)
+5. Check "Submit to Play Store after build" if you want auto-submission
+6. Click **"Run workflow"**
+
+---
+
+## Day-to-Day: Releasing a New Version
+
+Once everything above is set up, releasing a new version is just:
+
+```bash
+# Bump the version number (1.0.0 -> 1.0.1)
 npm version patch
 
-# Minor: 1.0.0 -> 1.1.0
-npm version minor
+# Commit the version bump
+git add package.json app.json
+git commit -m "chore: bump version to 1.0.1"
+git push
 
-# Major: 1.0.0 -> 2.0.0
-npm version major
+# Tag and push to trigger CI/CD
+git tag v1.0.1
+git push origin v1.0.1
 ```
 
-The `versionCode` (Android's internal build number) is managed by EAS automatically via `appVersionSource: "remote"`.
+Or do it all locally in one command:
+
+```bash
+npm run release
+```
+
+This bumps the patch version, builds a signed AAB, and submits to Google Play.
 
 ---
 
-## Quick Reference
+## All Available Commands
 
-```bash
-# Setup credentials for the first time
-npm run credentials:setup
-
-# Build a signed production AAB
-npm run build:production
-
-# Build a signed APK for testing
-npm run build:apk
-
-# View current signing credentials
-npm run credentials:info
-
-# Submit to Google Play Store
-npm run submit:android
-
-# Build + submit in one command
-npm run build-and-submit
-
-# Bump version and release
-npm run release
-```
+| Command | What it does |
+|---------|-------------|
+| `npm run build:apk` | Build a signed APK for testing (sideload onto devices) |
+| `npm run build:production` | Build a signed AAB for the Play Store |
+| `npm run build:production:local` | Build signed AAB locally (not on EAS servers) |
+| `npm run credentials:setup` | Set up or update Android signing credentials |
+| `npm run credentials:info` | View current signing credential details |
+| `npm run submit:android` | Submit the latest build to Google Play |
+| `npm run build-and-submit` | Build + submit in one step |
+| `npm run release` | Bump version + build + submit |
 
 ---
 
 ## Troubleshooting
 
-| Issue | Solution |
-|-------|----------|
-| "No Expo project found" | Run `eas init` to link the project |
-| "Keystore not found" | Run `npm run credentials:setup` to generate or upload one |
-| "Play Store rejected submission" | Ensure app listing is complete in Play Console first |
-| "Service account permission denied" | Verify the service account has Release Manager role in Play Console |
-| Build fails with signing error | Run `npm run credentials:info` to check credential status |
+### "Not logged in"
+```bash
+eas login
+```
+
+### "No Expo project found" or "projectId is empty"
+```bash
+eas init
+```
+Then commit the updated `app.json`.
+
+### "Keystore not found"
+```bash
+npm run credentials:setup
+# Select "Generate new keystore"
+```
+
+### "Play Store rejected submission"
+Your app listing in Play Console is incomplete. Check the **Dashboard** for a checklist of required items.
+
+### "Service account permission denied"
+Go back to Play Console > **Setup > API access** and make sure the service account has **Releases** permissions for the Keg Batch Scanner app.
+
+### "Build takes too long" or times out
+Free Expo accounts have limited build concurrency. Check https://expo.dev/accounts/your-username/builds for queue status. Consider upgrading to EAS Production plan for faster builds.
+
+### "I lost my keystore"
+If you used EAS-managed credentials (recommended), your keystore is safely stored on Expo's servers. Run `npm run credentials:info` to confirm. You can also download a backup:
+```bash
+eas credentials --platform android
+# Select "Download credentials"
+```
+**Store the backup in a safe place** (password manager, secure drive). If you lose the keystore and it's not on EAS, you can never update your app on the Play Store.
