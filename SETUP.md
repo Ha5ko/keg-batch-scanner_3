@@ -78,7 +78,7 @@ export const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycb.../e
 In the same file, confirm your email is correct:
 
 ```typescript
-export const USER_EMAIL = 'shantu.hasko@ab-inbev.com';
+export const USER_EMAIL = '';
 ```
 
 ---
