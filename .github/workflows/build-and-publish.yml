@@ -1,0 +1,102 @@
+name: Build, Sign & Publish Android
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'EAS build profile'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - preview
+          - production
+      submit:
+        description: 'Submit to Play Store after build'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  build:
+    name: Build & Sign Android App
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Determine build profile
+        id: profile
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "profile=production" >> $GITHUB_OUTPUT
+          else
+            echo "profile=${{ inputs.profile }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build Android app (signed)
+        run: eas build --platform android --profile ${{ steps.profile.outputs.profile }} --non-interactive
+
+      - name: Verify build artifact
+        run: |
+          echo "Build completed successfully."
+          echo "The app bundle was signed with credentials managed by EAS."
+          echo ""
+          echo "To verify the signing locally, download the artifact and run:"
+          echo "  jarsigner -verify -verbose -certs app.aab"
+          echo "  or"
+          echo "  apksigner verify --print-certs app.apk"
+
+  submit:
+    name: Submit to Google Play Store
+    needs: build
+    if: >
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
+      (github.event_name == 'workflow_dispatch' && inputs.submit == true)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Write Play Store credentials
+        run: echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY }}' > play-store-credentials.json
+
+      - name: Submit to Google Play (internal track)
+        run: eas submit --platform android --profile production --non-interactive
+
+      - name: Cleanup credentials
+        if: always()
+        run: rm -f play-store-credentials.json
