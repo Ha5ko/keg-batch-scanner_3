@@ -62,7 +62,7 @@ assets/                      # App icons (must be valid PNGs!)
 
 In `App.tsx` lines 23-25:
 ```typescript
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/.../exec';
+const GOOGLE_SCRIPT_URL = 'x';
 const USER_EMAIL = 'x';
 ```
 

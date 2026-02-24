@@ -44,7 +44,7 @@ The app consists of two parts:
 
 The URL looks like:
 ```
-https://script.google.com/macros/s/AKfycb.../exec
+x
 ```
 
 ### Step 4: Test the Script
@@ -70,7 +70,7 @@ Open `src/utils/config.ts` and replace the placeholder:
 export const GOOGLE_SCRIPT_URL = 'YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE';
 
 // After
-export const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycb.../exec';
+export const GOOGLE_SCRIPT_URL = 'x';
 ```
 
 ### Step 2: Verify Your Email
